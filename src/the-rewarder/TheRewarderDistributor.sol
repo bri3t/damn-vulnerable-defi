@@ -37,6 +37,7 @@ contract TheRewarderDistributor {
     error AlreadyClaimed();
     error InvalidProof();
     error NotEnoughTokensToDistribute();
+    error SeRepite();
 
     event NewDistribution(IERC20 token, uint256 batchNumber, bytes32 newMerkleRoot, uint256 totalAmount);
 
@@ -83,9 +84,28 @@ contract TheRewarderDistributor {
         IERC20 token;
         uint256 bitsSet; // accumulator
         uint256 amount;
+        uint index_1 = 3;
+         uint index_2 = 3;
 
         for (uint256 i = 0; i < inputClaims.length; i++) {
             inputClaim = inputClaims[i];
+            
+            if (inputClaims[i].tokenIndex != index_1 ){
+
+                index_1 =  inputClaims[i].tokenIndex;
+
+            }
+
+             if (inputClaims[i].tokenIndex != index_2 ){
+
+                index_2 =  inputClaims[i].tokenIndex;
+            }
+
+            //  if (inputClaims[i].tokenIndex == index_2 ||  inputClaims[i].tokenIndex == index_1 ){
+
+            //     revert SeRepite();
+            // }
+
 
             uint256 wordPosition = inputClaim.batchNumber / 256;
             uint256 bitPosition = inputClaim.batchNumber % 256;

