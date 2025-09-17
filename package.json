@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@ethersproject/rlp": "^5.8.0",
+    "ethers": "^6.15.0"
+  }
+}

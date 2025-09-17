@@ -98,6 +98,10 @@ contract PuppetV2Challenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_puppetV2() public checkSolvedByPlayer {
+
+        // Exploit: The exploit works by manipulating the Uniswap V2 exchange rate to drastically reduce the amount of WETH required as collateral
+        // to borrow all tokens from the lending pool. The attacker first swaps a large amount of tokens for WETH on the Uniswap exchange, which
+        // skews the price in favor of WETH. This manipulation allows the attacker to borrow all tokens from the lending pool with significantly less WETH than would normally be required.
         
         // console.log(weth.balanceOf(address(player)));
 

